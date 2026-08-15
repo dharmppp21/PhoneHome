@@ -1,0 +1,14 @@
+# Local geolocation cache. Never commit this: it is a record of the addresses
+# this particular machine has contacted.
+*.sqlite3
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

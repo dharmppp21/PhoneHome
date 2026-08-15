@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PhoneHome</title>
+<style>
+  :root {
+    --bg: #070b14;
+    --panel: #0d1424;
+    --line: #1d2942;
+    --ink: #e6edf7;
+    --dim: #8296b4;
+    --faint: #55688a;
+    --accent: #4cc9f0;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 13px/1.5 "Segoe UI", system-ui, sans-serif;
+    overflow: hidden;
+  }
+  #app {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    grid-template-rows: auto 1fr;
+    height: 100%;
+  }
+
+  header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+  .brand { font-weight: 650; letter-spacing: .5px; margin-right: 8px; }
+  .brand span { color: var(--accent); }
+  .stat { display: flex; flex-direction: column; line-height: 1.15; }
+  .stat b { font-size: 19px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .stat i {
+    font-style: normal; font-size: 10px; text-transform: uppercase;
+    letter-spacing: .09em; color: var(--faint);
+  }
+  header .spacer { margin-left: auto; }
+  button {
+    background: #172440; color: var(--ink); border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 13px; font: inherit; cursor: pointer;
+  }
+  button:hover { background: #1e2f52; border-color: #2c3f66; }
+
+  aside {
+    border-right: 1px solid var(--line);
+    background: var(--panel);
+    overflow-y: auto;
+    padding: 12px 0;
+  }
+  .aside-title {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
+    color: var(--faint); padding: 0 16px 8px;
+  }
+  .proc {
+    display: flex; align-items: center; gap: 9px;
+    padding: 7px 16px; cursor: pointer; border-left: 2px solid transparent;
+  }
+  .proc:hover { background: #131d33; }
+  .proc.active { background: #16223c; border-left-color: var(--accent); }
+  .proc.muted { opacity: .38; }
+  .swatch { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .proc .name {
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .proc .n { color: var(--dim); font-variant-numeric: tabular-nums; }
+  .hint { padding: 10px 16px; color: var(--faint); font-size: 11px; }
+
+  main { position: relative; overflow: hidden; }
+  canvas { display: block; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+
+  #tooltip {
+    position: absolute; pointer-events: none; opacity: 0;
+    transition: opacity .12s; transform: translate(-50%, -100%);
+    background: rgba(8,13,24,.96); border: 1px solid var(--line);
+    border-radius: 7px; padding: 9px 11px; max-width: 340px;
+    box-shadow: 0 8px 26px rgba(0,0,0,.5);
+  }
+  #tooltip .host { font-weight: 600; word-break: break-all; }
+  #tooltip .meta { color: var(--dim); font-size: 11.5px; margin-top: 3px; }
+  #tooltip .proc-line { color: var(--accent); font-size: 11.5px; margin-top: 4px; }
+
+  #legend {
+    position: absolute; left: 16px; bottom: 14px;
+    color: var(--faint); font-size: 11px;
+  }
+
+  /* Without this, a dead server looks identical to a quiet one: the globe keeps
+     spinning and the last snapshot sits there looking live. */
+  #link-state {
+    position: absolute; top: 14px; right: 16px; display: none;
+    align-items: center; gap: 8px; padding: 6px 13px; border-radius: 999px;
+    font-size: 11.5px; background: rgba(86,16,34,.94);
+    border: 1px solid #7d2540; color: #ffd6de;
+  }
+  #link-state.show { display: flex; }
+  #link-state .blip {
+    width: 7px; height: 7px; border-radius: 50%; background: #ff5c7a;
+    animation: blip 1.1s ease-in-out infinite;
+  }
+  @keyframes blip { 50% { opacity: .2; } }
+  @media (prefers-reduced-motion: reduce) {
+    #link-state .blip { animation: none; }
+  }
+
+  #modal {
+    position: fixed; inset: 0; background: rgba(3,6,12,.82);
+    display: none; align-items: center; justify-content: center; padding: 30px;
+  }
+  #modal.open { display: flex; }
+  .sheet {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 11px;
+    width: min(860px, 100%); max-height: 100%; overflow-y: auto; padding: 24px 28px;
+  }
+  .sheet h2 { margin: 0 0 4px; font-size: 19px; }
+  .sheet h3 {
+    margin: 24px 0 8px; font-size: 10px; text-transform: uppercase;
+    letter-spacing: .09em; color: var(--faint); font-weight: 600;
+  }
+  .sheet .sub { color: var(--dim); margin-bottom: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th {
+    text-align: left; color: var(--faint); font-weight: 500; padding: 5px 8px 5px 0;
+    border-bottom: 1px solid var(--line); font-size: 11px;
+  }
+  td { padding: 5px 8px 5px 0; border-bottom: 1px solid #131c30; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; color: var(--dim); }
+  .ip { color: var(--faint); }
+  .close-row { display: flex; justify-content: flex-end; margin-top: 22px; }
+  .empty { color: var(--faint); padding: 6px 0; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header>
+    <div class="brand">Phone<span>Home</span></div>
+    <div class="stat"><b id="s-dest">0</b><i>destinations</i></div>
+    <div class="stat"><b id="s-country">0</b><i>countries</i></div>
+    <div class="stat"><b id="s-proc">0</b><i>processes</i></div>
+    <div class="stat"><b id="s-time">0:00</b><i>watching for</i></div>
+    <div class="spacer"></div>
+    <div class="stat" style="text-align:right"><b id="s-me">—</b><i id="s-me-label">locating</i></div>
+    <button id="report-btn">Session report</button>
+  </header>
+
+  <aside>
+    <div class="aside-title">Processes</div>
+    <div id="procs"></div>
+    <div class="hint" id="proc-hint">Waiting for connections…</div>
+  </aside>
+
+  <main>
+    <canvas id="globe"></canvas>
+    <div id="link-state"><span class="blip"></span><span id="link-text"></span></div>
+    <div id="tooltip"></div>
+    <div id="legend">drag to spin · scroll to zoom · double-click to reset</div>
+  </main>
+</div>
+
+<div id="modal"><div class="sheet" id="sheet"></div></div>
+
+<script src="/static/vendor/d3.min.js"></script>
+<script src="/static/vendor/topojson-client.min.js"></script>
+<script>
+"use strict";
+
+const TAU = Math.PI * 2;
+const ARC_DRAW = 700, ARC_HOLD = 6000, ARC_FADE = 3000;
+const ARC_LIFE = ARC_DRAW + ARC_HOLD + ARC_FADE;
+
+const PALETTE = [
+  "#4cc9f0", "#f72585", "#ffd166", "#90be6d", "#c77dff", "#f8961e",
+  "#43aa8b", "#ff8fab", "#8ecae6", "#e07a5f", "#b5179e", "#06d6a0",
+];
+
+const state = {
+  me: null,
+  conns: new Map(),   // id -> record
+  arcs: [],
+  filter: null,
+  colors: new Map(),
+  land: null,
+  arced: new Set(),   // ids that already flew an arc, so updates don't re-fire
+  openedAt: Date.now(),
+};
+
+function colorFor(proc) {
+  if (!state.colors.has(proc)) {
+    state.colors.set(proc, PALETTE[state.colors.size % PALETTE.length]);
+  }
+  return state.colors.get(proc);
+}
+
+function withAlpha(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+function located(c) {
+  return c.geo && c.geo.lat != null && c.geo.lon != null;
+}
+
+function shown() {
+  const all = [...state.conns.values()];
+  return state.filter ? all.filter((c) => c.process === state.filter) : all;
+}
+
+/* ---------- globe ---------- */
+
+const canvas = document.getElementById("globe");
+const ctx = canvas.getContext("2d");
+const projection = d3.geoOrthographic().precision(0.4).clipAngle(90);
+const path = d3.geoPath(projection, ctx);
+const graticule = d3.geoGraticule10();
+
+let rotation = [0, -18, 0];
+let autoRotate = true;
+let resumeTimer = null;
+let size = { w: 0, h: 0 };
+const hits = [];
+
+let zoom = 1;
+
+function applyScale() {
+  // Math.max floors the scale: a briefly tiny container would otherwise produce a
+  // negative radius and draw nothing.
+  const base = Math.max(20, Math.min(size.w, size.h) / 2 - 26);
+  projection.scale(base * zoom).translate([size.w / 2, size.h / 2]);
+}
+
+function resize() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  // Layout can report a near-zero box before it settles.
+  if (rect.width < 2 || rect.height < 2) return;
+  const dpr = window.devicePixelRatio || 1;
+
+  // Round the backing store first, then derive the CSS box back from it, so the
+  // two agree exactly. Setting style width from the raw fractional rect while the
+  // backing store is rounded leaves the browser resampling the canvas by a few
+  // tenths of a pixel -- which is what reads as "blurry" at 125%/150% scaling.
+  const w = Math.round(rect.width * dpr);
+  const h = Math.round(rect.height * dpr);
+  canvas.width = w;
+  canvas.height = h;
+  canvas.style.width = w / dpr + "px";
+  canvas.style.height = h / dpr + "px";
+  size = { w: w / dpr, h: h / dpr };
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  applyScale();
+}
+
+// A ResizeObserver, not a window listener: it also fires on the *initial* layout,
+// which a one-shot call at boot can miss entirely if the container is still 0px
+// wide at that moment -- leaving a permanently blank globe.
+new ResizeObserver(resize).observe(canvas.parentElement);
+
+// ...but a ResizeObserver does NOT fire when only devicePixelRatio changes, and
+// that is precisely what browser zoom does. Without this the canvas keeps the
+// backing resolution it had at the old zoom level and stays blurry for good.
+// A `resolution` media query is the only reliable notification; it has to be
+// re-armed after each change because the query itself bakes in the old value.
+let dprQuery = null;
+function onDprChange() {
+  resize();
+  watchDpr();
+}
+function watchDpr() {
+  if (dprQuery) dprQuery.removeEventListener("change", onDprChange);
+  dprQuery = matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+  dprQuery.addEventListener("change", onDprChange);
+}
+watchDpr();
+
+// Zooming the globe itself, so magnification redraws vectors at full resolution
+// instead of enlarging pixels the way browser zoom does.
+canvas.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const next = Math.max(1, Math.min(6, zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
+  if (next === zoom) return;
+
+  // Keep whatever is under the cursor under the cursor. On a globe you can't just
+  // offset a translate: you have to rotate the sphere back by however far the
+  // anchor drifted. invert() returns null outside the disc, so hovering empty
+  // space falls back to plain centre-zoom.
+  const r = canvas.getBoundingClientRect();
+  const at = [e.clientX - r.left, e.clientY - r.top];
+  const anchor = projection.invert(at);
+
+  zoom = next;
+  applyScale();
+
+  if (anchor) {
+    const drifted = projection.invert(at);
+    if (drifted) {
+      // rotation[] is the negative of the centre, so the correction is
+      // (new - old), not (old - new).
+      rotation[0] += drifted[0] - anchor[0];
+      rotation[1] += drifted[1] - anchor[1];
+      rotation[1] = Math.max(-88, Math.min(88, rotation[1]));
+      projection.rotate(rotation);
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener("dblclick", () => { zoom = 1; applyScale(); });
+
+// Endpoints keep their pixel size as the globe grows, which leaves them looking
+// lost at 6x. Grow them sub-linearly so they stay readable without swamping it.
+function dotScale() {
+  return Math.min(2.2, Math.pow(zoom, 0.45));
+}
+
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+
+d3.select(canvas).call(
+  d3.drag()
+    .on("start", () => { autoRotate = false; clearTimeout(resumeTimer); })
+    .on("drag", (e) => {
+      rotation[0] += e.dx * 0.28;
+      rotation[1] = Math.max(-88, Math.min(88, rotation[1] - e.dy * 0.28));
+    })
+    .on("end", () => { resumeTimer = setTimeout(() => (autoRotate = true), 5000); })
+);
+
+function visible(coord) {
+  return d3.geoDistance(coord, [-rotation[0], -rotation[1]]) < Math.PI / 2;
+}
+
+// Great-circle points are the same every frame, so interpolate once per
+// connection. 32 segments is smooth at any zoom the projection allows.
+const linkCache = new Map();
+function linkPoints(c) {
+  let pts = linkCache.get(c.id);
+  if (!pts) {
+    const interp = d3.geoInterpolate(
+      [state.me.lon, state.me.lat], [c.geo.lon, c.geo.lat]
+    );
+    pts = [];
+    for (let i = 0; i <= 32; i++) pts.push(interp(i / 32));
+    linkCache.set(c.id, pts);
+  }
+  return pts;
+}
+
+function draw(now) {
+  ctx.clearRect(0, 0, size.w, size.h);
+
+  ctx.beginPath(); path({ type: "Sphere" });
+  ctx.fillStyle = "#0a1122"; ctx.fill();
+
+  ctx.beginPath(); path(graticule);
+  ctx.strokeStyle = "rgba(120,155,215,.10)"; ctx.lineWidth = 0.5; ctx.stroke();
+
+  if (state.land) {
+    ctx.beginPath(); path(state.land);
+    ctx.fillStyle = "#17233c"; ctx.fill();
+    ctx.strokeStyle = "rgba(130,165,225,.22)"; ctx.lineWidth = 0.5; ctx.stroke();
+  }
+
+  ctx.beginPath(); path({ type: "Sphere" });
+  ctx.strokeStyle = "rgba(140,180,240,.30)"; ctx.lineWidth = 1; ctx.stroke();
+
+  // standing links: every open connection stays tethered to you. Without these
+  // the globe fills with dots that have nothing joining them, because the bright
+  // arcs below are one-shot events that expire after ~10s.
+  if (state.me) {
+    for (const c of shown()) {
+      if (!located(c)) continue;
+      ctx.beginPath();
+      path({ type: "LineString", coordinates: linkPoints(c) });
+      ctx.strokeStyle = withAlpha(colorFor(c.process), 0.20);
+      ctx.lineWidth = 0.9;
+      ctx.stroke();
+    }
+  }
+
+  // arcs: the bright animated flare when a connection is first seen
+  state.arcs = state.arcs.filter((a) => now - a.born < ARC_LIFE);
+  for (const a of state.arcs) {
+    if (state.filter && a.process !== state.filter) continue;
+    const age = now - a.born;
+    const grow = Math.min(1, age / ARC_DRAW);
+    const alpha = age < ARC_DRAW + ARC_HOLD
+      ? 1
+      : Math.max(0, 1 - (age - ARC_DRAW - ARC_HOLD) / ARC_FADE);
+    const steps = Math.max(1, Math.round(48 * grow));
+    const pts = [];
+    for (let i = 0; i <= steps; i++) pts.push(a.interp(i / 48));
+    ctx.beginPath();
+    path({ type: "LineString", coordinates: pts });
+    ctx.strokeStyle = withAlpha(a.color, alpha * 0.85);
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+  }
+
+  // endpoints
+  const ds = dotScale();
+  hits.length = 0;
+  for (const c of shown()) {
+    if (!located(c)) continue;
+    const coord = [c.geo.lon, c.geo.lat];
+    if (!visible(coord)) continue;
+    const [x, y] = projection(coord);
+    const color = colorFor(c.process);
+    ctx.beginPath(); ctx.arc(x, y, 5.5 * ds, 0, TAU);
+    ctx.fillStyle = withAlpha(color, 0.18); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, 2.9 * ds, 0, TAU);
+    ctx.fillStyle = color; ctx.fill();
+    if (c.id === hoverId) {
+      ctx.beginPath(); ctx.arc(x, y, 9 * ds, 0, TAU);
+      ctx.strokeStyle = withAlpha(color, 0.9); ctx.lineWidth = 1.4; ctx.stroke();
+    }
+    hits.push({ x, y, c });
+  }
+
+  // you
+  if (state.me && visible([state.me.lon, state.me.lat])) {
+    const [x, y] = projection([state.me.lon, state.me.lat]);
+    const pulse = reduceMotion.matches ? 0.5 : (Math.sin(now / 620) + 1) / 2;
+    ctx.beginPath(); ctx.arc(x, y, (6 + pulse * 8) * ds, 0, TAU);
+    ctx.fillStyle = `rgba(255,255,255,${0.16 * (1 - pulse)})`; ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, 4 * ds, 0, TAU);
+    ctx.fillStyle = "#fff"; ctx.fill();
+  }
+}
+
+let hoverId = null;
+
+let last = performance.now();
+function frame(now) {
+  const dt = now - last;
+  last = now;
+  if (autoRotate && !reduceMotion.matches) rotation[0] += dt * 0.0035;
+  projection.rotate(rotation);
+  draw(now);
+  requestAnimationFrame(frame);
+}
+
+/* ---------- tooltip ---------- */
+
+const tip = document.getElementById("tooltip");
+canvas.addEventListener("mousemove", (e) => {
+  const r = canvas.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  const reach = 13 * dotScale();          // grab radius tracks the drawn dot size
+  let best = null, bestD = reach * reach;
+  for (const h of hits) {
+    const d = (h.x - mx) ** 2 + (h.y - my) ** 2;
+    if (d < bestD) { bestD = d; best = h; }
+  }
+  if (!best) { tip.style.opacity = 0; hoverId = null; return; }
+  hoverId = best.c.id;
+  const c = best.c, g = c.geo;
+  const place = [g.city, g.country].filter(Boolean).join(", ") || "unknown";
+  tip.innerHTML =
+    `<div class="host">${esc(c.hostname)}</div>` +
+    (c.resolved ? "" : `<div class="meta">no DNS name — went straight to IP</div>`) +
+    `<div class="meta">${esc(place)}${g.isp ? " · " + esc(g.isp) : ""}</div>` +
+    `<div class="proc-line">${esc(c.process)} · port ${c.remote_port}</div>`;
+
+  // Keep it on screen. The transform is translate(-50%, -100%), so the box spans
+  // x +/- w/2 and sits entirely above y -- both of which run off the edges for
+  // dots near the rim, which is exactly where long hostnames tend to land.
+  tip.style.opacity = 1;
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  const x = Math.max(w / 2 + 6, Math.min(size.w - w / 2 - 6, best.x));
+  const above = best.y - 12;
+  const y = above - h < 6 ? best.y + 12 + h : above;   // flip below when it won't fit
+  tip.style.left = x + "px";
+  tip.style.top = y + "px";
+});
+canvas.addEventListener("mouseleave", () => {
+  tip.style.opacity = 0;
+  hoverId = null;
+});
+
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (ch) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch])
+  );
+}
+
+/* ---------- sidebar + counters ---------- */
+
+const procsEl = document.getElementById("procs");
+const hintEl = document.getElementById("proc-hint");
+
+function renderSidebar() {
+  const byProc = new Map();
+  for (const c of state.conns.values()) {
+    if (!byProc.has(c.process)) byProc.set(c.process, new Set());
+    byProc.get(c.process).add(c.remote_ip);
+  }
+  const rows = [...byProc]
+    .map(([p, s]) => ({ p, n: s.size }))
+    .sort((a, b) => b.n - a.n || a.p.localeCompare(b.p));
+
+  // This runs on every websocket message. Rebuilding the DOM each time drops
+  // :hover mid-pointer and can swallow a click that lands between frames, so
+  // only touch it when the list actually changed.
+  const sig = rows.map((r) => r.p + ":" + r.n).join("|") + "||" + state.filter;
+  if (sig !== renderSidebar.sig) {
+    renderSidebar.sig = sig;
+    procsEl.innerHTML = "";
+    for (const row of rows) {
+      const el = document.createElement("div");
+      el.className = "proc" +
+        (state.filter === row.p ? " active" : "") +
+        (state.filter && state.filter !== row.p ? " muted" : "");
+      el.innerHTML =
+        `<span class="swatch" style="background:${colorFor(row.p)}"></span>` +
+        `<span class="name">${esc(row.p)}</span><span class="n">${row.n}</span>`;
+      el.onclick = () => {
+        state.filter = state.filter === row.p ? null : row.p;
+        renderSidebar();
+      };
+      procsEl.appendChild(el);
+    }
+    hintEl.textContent = rows.length
+      ? (state.filter ? "Click again to clear the filter." : "")
+      : "Waiting for connections…";
+  }
+
+  const ips = new Set(), countries = new Set();
+  let unlocated = 0;
+  for (const c of state.conns.values()) {
+    ips.add(c.remote_ip);
+    if (located(c)) { if (c.geo.country) countries.add(c.geo.country); }
+    else unlocated++;
+  }
+  document.getElementById("s-dest").textContent = ips.size;
+  document.getElementById("s-country").textContent = countries.size;
+  document.getElementById("s-proc").textContent = rows.length;
+  document.getElementById("legend").textContent =
+    "drag to spin · scroll to zoom · double-click to reset" +
+    (unlocated ? ` · ${unlocated} not yet located` : "");
+}
+
+setInterval(() => {
+  const s = Math.floor((Date.now() - state.openedAt) / 1000);
+  document.getElementById("s-time").textContent =
+    `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}, 1000);
+
+/* ---------- live data ---------- */
+
+function spawnArc(c) {
+  if (!state.me || !located(c) || state.arced.has(c.id)) return;
+  state.arced.add(c.id);
+  state.arcs.push({
+    interp: d3.geoInterpolate([state.me.lon, state.me.lat], [c.geo.lon, c.geo.lat]),
+    born: performance.now(),
+    color: colorFor(c.process),
+    process: c.process,
+  });
+}
+
+function applySelf(me) {
+  if (!me) return;
+  const first = !state.me;
+  state.me = me;
+  linkCache.clear();               // every link starts from here
+  if (first) rotation = [-me.lon, -me.lat, 0];  // don't yank a globe being dragged
+  document.getElementById("s-me").textContent = me.city || me.country || "—";
+  document.getElementById("s-me-label").textContent = me.isp || "you";
+}
+
+const linkStateEl = document.getElementById("link-state");
+const linkTextEl = document.getElementById("link-text");
+let retries = 0;
+
+function showLink(connected, text) {
+  linkStateEl.className = connected ? "" : "show";
+  if (!connected) linkTextEl.textContent = text;
+}
+
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+
+  ws.onopen = () => { retries = 0; showLink(true); };
+
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+
+    if (msg.type === "snapshot") {
+      applySelf(msg.self);
+      state.conns.clear();
+      state.arced.clear();
+      linkCache.clear();
+      msg.connections.forEach((c, i) => {
+        state.conns.set(c.id, c);
+        // stagger the opening burst so it reads as a sweep, not a flash
+        setTimeout(() => spawnArc(c), i * 70);
+      });
+    } else if (msg.type === "self") {
+      // Sent when the server finishes locating us. A client that connected before
+      // that finished got self:null in its snapshot, and without this would never
+      // draw a single arc or link for the whole session.
+      applySelf(msg.self);
+      [...state.conns.values()].forEach((c, i) => setTimeout(() => spawnArc(c), i * 70));
+    } else if (msg.type === "delta") {
+      for (const c of msg.new) { state.conns.set(c.id, c); spawnArc(c); }
+      for (const c of msg.updated) {
+        state.conns.set(c.id, c);
+        linkCache.delete(c.id);   // geo may have only just arrived
+        spawnArc(c);
+      }
+      for (const id of msg.closed) {
+        state.conns.delete(id);
+        state.arced.delete(id);
+        linkCache.delete(id);
+      }
+    }
+    renderSidebar();
+  };
+
+  ws.onclose = () => {
+    // Back off to 10s so a server that's down for a while isn't hammered once a
+    // second for the rest of the day.
+    const wait = Math.min(10000, 1000 * 2 ** Math.min(retries++, 4));
+    showLink(false, retries > 1 ? `server offline — retrying in ${wait / 1000}s` : "reconnecting…");
+    setTimeout(connect, wait);
+  };
+  ws.onerror = () => ws.close();
+}
+
+/* ---------- session report ---------- */
+
+const modal = document.getElementById("modal");
+const sheet = document.getElementById("sheet");
+
+document.getElementById("report-btn").onclick = async () => {
+  sheet.innerHTML = "<h2>Session report</h2><p class='sub'>Loading…</p>";
+  modal.classList.add("open");
+  let r;
+  try {
+    r = await (await fetch("/api/report")).json();
+  } catch (err) {
+    sheet.innerHTML = "<h2>Session report</h2><p class='sub'>Could not load.</p>";
+    return;
+  }
+  const s = r.session;
+  const mins = Math.round(s.duration_seconds / 60);
+
+  // `empty` needs a default: two of the four call sites below omit it, and without
+  // one an empty section renders the literal string "undefined" -- which is what you
+  // get opening the report in the first few seconds of a session.
+  const table = (head, rows, empty = "Nothing yet.") =>
+    rows.length
+      ? `<table><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr>${rows.join("")}</table>`
+      : `<div class="empty">${empty}</div>`;
+
+  sheet.innerHTML =
+    `<h2>Session report</h2>
+     <p class="sub">${s.connections_seen} connections to
+      <b>${s.distinct_destinations}</b> distinct destinations
+      (${s.distinct_addresses} addresses) in
+      <b>${s.countries}</b> countries, from <b>${s.distinct_processes}</b> processes,
+      over ${mins < 1 ? "under a minute" : mins + " min"}.
+      ${s.unresolved_destinations} of them never gave up a hostname.</p>
+
+     <h3>Top talkers</h3>
+     ${table(["Process", "Destinations", "Connections"],
+        r.top_processes.slice(0, 12).map((p) =>
+          `<tr><td>${esc(p.process)}</td><td class="num">${p.destinations}</td>
+           <td class="num">${p.connections}</td></tr>`))}
+
+     <h3>Most contacted</h3>
+     ${table(["Host", "Where", "IPs", "Times"],
+        r.top_destinations.slice(0, 15).map((d) =>
+          `<tr><td class="${d.resolved ? "" : "ip"}">${esc(d.hostname)}</td>
+           <td>${esc([d.city, d.country].filter(Boolean).join(", ") || "—")}</td>
+           <td class="num">${d.addresses}</td>
+           <td class="num">${d.count}</td></tr>`))}
+
+     <h3>Countries</h3>
+     ${table(["Country", "Destinations"],
+        r.countries.map((c) =>
+          `<tr><td>${esc(c.country)}</td><td class="num">${c.destinations}</td></tr>`),
+        "Nothing located yet.")}
+
+     <h3>Contacted exactly once</h3>
+     <p class="sub">One-shot pings — telemetry, update checks, and beacons live here.</p>
+     ${table(["Host", "Process", "Where"],
+        r.one_offs.slice(0, 25).map((d) =>
+          `<tr><td class="${d.resolved ? "" : "ip"}">${esc(d.hostname)}</td>
+           <td>${esc(d.processes.join(", "))}</td>
+           <td>${esc([d.city, d.country].filter(Boolean).join(", ") || "—")}</td></tr>`),
+        "None yet.")}
+
+     <div class="close-row"><button id="close-btn">Close</button></div>`;
+
+  document.getElementById("close-btn").onclick = () => modal.classList.remove("open");
+};
+
+modal.onclick = (e) => { if (e.target === modal) modal.classList.remove("open"); };
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") modal.classList.remove("open");
+});
+
+/* ---------- boot ---------- */
+
+(async function boot() {
+  resize();
+  requestAnimationFrame(frame);
+  const world = await (await fetch("/static/vendor/countries-110m.json")).json();
+  state.land = topojson.feature(world, world.objects.countries);
+  connect();
+})();
+</script>
+</body>
+</html>
