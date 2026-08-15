@@ -18,12 +18,17 @@
 <br>
 
 ```powershell
+git clone https://github.com/dharmppp21/PhoneHome.git
+cd PhoneHome
 pip install -r requirements.txt
 python -m phonehome
 ```
 
 A browser opens. Within seconds you are looking at every server your machine is
 currently reaching, where each one is, and which program opened it.
+
+> Needs Python 3.11 or newer — `winget install Python.Python.3.12` if you don't
+> have it, then reopen the terminal so `python` lands on PATH.
 
 **No packet capture. No kernel driver. No administrator. No account. No API key.**
 
