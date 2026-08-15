@@ -29,6 +29,10 @@ currently reaching, where each one is, and which program opened it.
 
 <br>
 
+<p align="center">
+  <img src="docs/demo.gif" alt="PhoneHome in motion — arcs firing to servers worldwide, filtered by process" width="100%">
+</p>
+
 ---
 
 ## What you actually see
@@ -45,13 +49,6 @@ one minute in:
 | `brave.exe` | `update.googleapis.com` | Delhi, India |
 
 Five countries, nobody touching the keyboard.
-
-<!--
-  Drop a recorded GIF in here and it goes right at the top of the page.
-  ShareX or ScreenToGif -> record the globe for ~10s -> save as docs/demo.gif:
-
-  <p align="center"><img src="docs/demo.gif" width="100%"></p>
--->
 
 ## Features
 
